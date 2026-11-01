@@ -1,0 +1,10 @@
+title = "gitleaks config for keras3-multibackend-arena"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow documentation placeholders and public GCP project IDs"
+paths = [
+  '''^\.gitleaks\.toml$'''
+]

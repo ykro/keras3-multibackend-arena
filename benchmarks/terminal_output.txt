@@ -1,0 +1,17 @@
+==========================================================================================
+KERAS 3 MULTI-BACKEND ARENA — OUTSIDE JUDGE VERIFICATION REPORT
+==========================================================================================
+Model Parameters               : 657,418
+Batch Size / Steps             : 256 / 45
+Cross-Backend Weight Parity    : PASS (max |JAX - Torch| = 2.98e-07, max |JAX - NumPy| = 4.17e-07)
+------------------------------------------------------------------------------------------
+Backend      |  Warmup (ms) | Train Step (ms) | Train (samples/s) | Eval Step (ms) | Eval (samples/s)
+------------------------------------------------------------------------------------------
+jax (XLA)    |       659.84 |          10.325 |           24794.8 |          4.614 |          55482.9
+torch (eager) |       159.03 |          20.643 |           12401.3 |          8.411 |          30435.1
+------------------------------------------------------------------------------------------
+Steady-State Speedup (JAX/XLA) : 2.00x faster training | 1.82x faster inference
+OpenXLA HLO Fusion Analysis    : 249 fusion ops across 1026 HLO lines (7.176 ms eager -> 4.065 ms XLA, 1.77x)
+Stateless jax.value_and_grad   : loss 2.63890 -> 0.69450 (acc 12.11% -> 91.41%, 9.866 ms/step)
+Cloud Run HTTP Smoke Test      : status=200, latency=4.167 ms, artifact=7787.6 KB
+==========================================================================================

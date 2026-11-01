@@ -1,0 +1,84 @@
+{
+  "project": "keras3-multibackend-arena",
+  "portability": {
+    "output_shape": [
+      32,
+      10
+    ],
+    "max_abs_diff_jax_vs_torch": 2.98e-07,
+    "max_abs_diff_jax_vs_numpy": 4.17e-07,
+    "allclose_atol_1e_5": true
+  },
+  "arena": {
+    "jax": {
+      "backend": "jax",
+      "batch_size": 256,
+      "steps": 45,
+      "params": 657418,
+      "warmup_compile_ms": 659.84,
+      "train_step_mean_ms": 10.325,
+      "train_step_p50_ms": 10.335,
+      "train_step_p95_ms": 11.056,
+      "train_throughput_samples_sec": 24794.8,
+      "eval_step_mean_ms": 4.614,
+      "eval_throughput_samples_sec": 55482.9,
+      "final_loss": 3e-05
+    },
+    "torch": {
+      "backend": "torch",
+      "batch_size": 256,
+      "steps": 45,
+      "params": 657418,
+      "warmup_compile_ms": 159.03,
+      "train_step_mean_ms": 20.643,
+      "train_step_p50_ms": 20.646,
+      "train_step_p95_ms": 21.305,
+      "train_throughput_samples_sec": 12401.3,
+      "eval_step_mean_ms": 8.411,
+      "eval_throughput_samples_sec": 30435.1,
+      "final_loss": 3e-05
+    },
+    "jax_vs_torch_train_speedup": 2.0,
+    "jax_vs_torch_eval_speedup": 1.82
+  },
+  "xla_fusion": {
+    "hlo_lines": 1026,
+    "hlo_fusion_ops": 249,
+    "hlo_dot_ops": 20,
+    "hlo_custom_calls": 0,
+    "eager_forward_ms": 7.176,
+    "xla_jit_forward_ms": 4.065,
+    "xla_fusion_speedup": 1.77
+  },
+  "stateless_custom_loop": {
+    "warmup_compile_ms": 373.32,
+    "initial_loss": 2.6389,
+    "final_loss": 0.6945,
+    "stateful_verify_loss": 0.65589,
+    "initial_acc": 0.1211,
+    "final_acc": 0.9141,
+    "final_grad_norm": 0.8841,
+    "mean_step_ms": 9.866,
+    "train_throughput_samples_sec": 25946.4,
+    "speedup_vs_torch_train": 2.09
+  },
+  "serving_smoke_test": {
+    "backend": "jax",
+    "predicted_class": 0,
+    "confidence": 0.495238,
+    "probabilities": [
+      0.495238,
+      0.332574,
+      0.001634,
+      0.097088,
+      0.000908,
+      0.004632,
+      0.003448,
+      0.04209,
+      0.015462,
+      0.006923
+    ],
+    "latency_ms": 4.167,
+    "artifact_size_kb": 7787.6
+  }
+}
