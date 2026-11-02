@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_ID="${PROJECT_ID:-ai-experiments-487722}"
+PROJECT_ID="${PROJECT_ID:?Set PROJECT_ID to your Google Cloud project id}"
 REGION="${REGION:-us-central1}"
 SERVICE_NAME="${SERVICE_NAME:-keras3-multibackend-arena}"
 

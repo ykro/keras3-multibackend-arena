@@ -2,7 +2,7 @@
 set -euo pipefail
 
 export CLOUDSDK_METRICS_ENVIRONMENT="${CLOUDSDK_METRICS_ENVIRONMENT:+$CLOUDSDK_METRICS_ENVIRONMENT }datacloud.antigravity"
-PROJECT_ID="${PROJECT_ID:-ai-experiments-487722}"
+PROJECT_ID="${PROJECT_ID:?Set PROJECT_ID to your Google Cloud project id}"
 REGION="${REGION:-us-central1}"
 JOB_NAME="keras3-multibackend-arena-$(date +%Y%m%d-%H%M%S)"
 IMAGE_URI="us-docker.pkg.dev/vertex-ai/training/jax-gpu.0-4:latest"
