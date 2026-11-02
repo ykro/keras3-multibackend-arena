@@ -61,7 +61,7 @@ class GatedResidualBlock(keras.layers.Layer):
         variance = ops.mean(ops.square(x), axis=-1, keepdims=True)
         normed = x * ops.rsqrt(variance + 1e-6) * self.gamma
 
-        # Gated GeGLU projection via keras.ops.matmul and keras.ops.gelu
+        # Gated projection gelu(u) * sigmoid(v) via keras.ops
         proj = ops.matmul(normed, self.w_up) + self.b_up
         u, v = ops.split(proj, 2, axis=-1)
         gated = ops.gelu(u) * ops.sigmoid(v)

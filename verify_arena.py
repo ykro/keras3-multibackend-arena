@@ -2,10 +2,10 @@
 
 Verifies:
 1. Subprocess isolation across `KERAS_BACKEND=jax`, `KERAS_BACKEND=torch`, and `KERAS_BACKEND=numpy`.
-2. Zero-copy weight portability: saves `.keras` under `jax` and reloads in `torch` and `numpy`
+2. Weight portability through a `.keras` file: saves under `jax` and reloads in `torch` and `numpy`
    with `np.allclose(atol=1e-5)`.
-3. Steady-state training & inference throughput advantage of `KERAS_BACKEND=jax` (OpenXLA)
-   over `KERAS_BACKEND=torch`.
+3. Steady-state training & inference throughput of `KERAS_BACKEND=jax` (jit-compiled) against
+   `KERAS_BACKEND=torch` in eager mode (no `torch.compile`, Keras default torch device).
 4. OpenXLA HLO fusion verification and custom `model.stateless_call` + `jax.value_and_grad`
    loss convergence.
 5. Writes real results to `benchmarks/latest_results.json` and `benchmarks/terminal_output.txt`.
@@ -182,17 +182,17 @@ def main() -> None:
             f"{arena['torch']['eval_throughput_samples_sec']:>16.1f}"
         ),
         "------------------------------------------------------------------------------------------",
-        f"Steady-State Speedup (JAX/XLA) : {train_speedup:.2f}x faster training | {eval_speedup:.2f}x faster inference",
+        f"Keras-jax jit vs torch eager   : {train_speedup:.2f}x train | {eval_speedup:.2f}x eval (torch on Keras default device)",
         (
-            f"OpenXLA HLO Fusion Analysis    : {fusion['hlo_fusion_ops']} fusion ops across {fusion['hlo_lines']} HLO lines "
-            f"({fusion['eager_forward_ms']:.3f} ms eager -> {fusion['xla_jit_forward_ms']:.3f} ms XLA, {fusion['xla_fusion_speedup']:.2f}x)"
+            f"HLO text, 'fusion' substrings  : {fusion['hlo_fusion_ops']} in {fusion['hlo_lines']} HLO lines "
+            f"(forward {fusion['eager_forward_ms']:.3f} ms eager -> {fusion['xla_jit_forward_ms']:.3f} ms jit, {fusion['xla_fusion_speedup']:.2f}x)"
         ),
         (
             f"Stateless jax.value_and_grad   : loss {stateless['initial_loss']:.5f} -> {stateless['final_loss']:.5f} "
             f"(acc {stateless['initial_acc']:.2%} -> {stateless['final_acc']:.2%}, {stateless['mean_step_ms']:.3f} ms/step)"
         ),
         (
-            f"Cloud Run HTTP Smoke Test      : status=200, latency={serving['latency_ms']:.3f} ms, "
+            f"Local HTTP smoke test          : status=200, model() latency={serving['latency_ms']:.3f} ms, "
             f"artifact={serving['artifact_size_kb']} KB"
         ),
         "==========================================================================================",

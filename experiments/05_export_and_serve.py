@@ -1,8 +1,10 @@
-"""Experiment 05: Portable .keras Artifact Export, Cross-Backend Reload, & Cloud Run Serving.
+"""Experiment 05: Portable .keras Artifact Export, Cross-Backend Reload, & Local HTTP Serving.
 
 Exports the trained `.keras` archive under `KERAS_BACKEND=jax`, verifies
-cross-backend reload parity, and exposes a lightweight HTTP JSON server ready
-for Cloud Run scale-to-zero (`--min-instances=0`).
+cross-backend reload parity, and exposes a lightweight local HTTP JSON server
+(the same handler could be containerized for Cloud Run; no Cloud Run numbers here).
+Note: `model(x)` runs eagerly, op by op; use `model.predict` or `jax.jit` over
+`stateless_call` for a compiled serving path.
 """
 
 from __future__ import annotations
@@ -47,8 +49,8 @@ def export_trained_artifact(artifact_path: Path = DEFAULT_ARTIFACT_PATH) -> Path
 
 
 def create_server(model: keras.Model, host: str = "127.0.0.1", port: int = 8080) -> HTTPServer:
-    """Creates a lightweight stdlib HTTPServer wrapping the JIT-compiled model."""
-    # Pre-warm inference step
+    """Creates a lightweight stdlib HTTPServer wrapping the model (eager `model(x)` calls)."""
+    # Warm-up call (fills per-op caches; model(x) is not jit-compiled)
     (vis_w, tab_w), _ = mod01.generate_synthetic_dataset(num_samples=1, seed=1)
     _ = ops.convert_to_numpy(model([vis_w, tab_w], training=False))
 
@@ -148,12 +150,12 @@ def main() -> None:
         srv.serve_forever()
         return
 
-    print("=== Experiment 05: Export .keras Artifact & Cloud Run Endpoint Smoke Test ===")
+    print("=== Experiment 05: Export .keras Artifact & Local HTTP Endpoint Smoke Test ===")
     res = run_smoke_test()
     print(f"Exported artifact size : {res['artifact_size_kb']} KB")
     print(f"Serving backend        : {res['backend']}")
     print(f"Predicted class        : {res['predicted_class']} (confidence={res['confidence']:.4f})")
-    print(f"HTTP inference latency : {res['latency_ms']:.3f} ms")
+    print(f"model() latency in HTTP: {res['latency_ms']:.3f} ms")
 
 
 if __name__ == "__main__":

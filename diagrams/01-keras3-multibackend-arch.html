@@ -67,7 +67,7 @@
     <div class="diagram-container">
       <svg viewBox="0 0 960 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="keras3-arch-title keras3-arch-desc">
         <title id="keras3-arch-title">Keras 3 Multi-Backend Architecture</title>
-        <desc id="keras3-arch-desc">Architecture diagram showing a single multimodal keras.ops model dispatching to JAX with OpenXLA fusion, PyTorch eager execution, or NumPy verification, and exporting a portable .keras artifact.</desc>
+        <desc id="keras3-arch-desc">Architecture diagram showing a single multimodal keras.ops model dispatching to JAX with OpenXLA fusion, PyTorch eager execution, or NumPy verification, and exporting a portable .keras artifact served by a local HTTP smoke test.</desc>
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
             <polygon points="0 0, 8 3, 0 6" fill="#3B5B8C"/>
@@ -188,9 +188,9 @@
         <rect x="716" y="332" width="188" height="96" rx="6" fill="#F7F6F2"/>
         <rect x="716" y="332" width="188" height="96" rx="6" fill="#EFECE6" stroke="#0F2547" stroke-width="1"/>
         <rect x="724" y="340" width="48" height="12" rx="2" fill="transparent" stroke="rgba(15,37,71,0.40)" stroke-width="0.8"/>
-        <text x="748" y="349" fill="#0F2547" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CLOUD</text>
-        <text x="810" y="378" fill="#0F2547" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Cloud Run Endpoint</text>
-        <text x="810" y="396" fill="#3B5B8C" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">--min-instances=0</text>
+        <text x="748" y="349" fill="#0F2547" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LOCAL</text>
+        <text x="810" y="378" fill="#0F2547" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">HTTP Endpoint</text>
+        <text x="810" y="396" fill="#3B5B8C" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">local smoke test</text>
         <text x="810" y="412" fill="#3B5B8C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">POST /predict :8080</text>
 
         <!-- Horizontal bottom legend strip -->

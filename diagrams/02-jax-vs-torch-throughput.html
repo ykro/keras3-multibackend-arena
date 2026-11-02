@@ -62,12 +62,12 @@
 <body>
   <div class="frame">
     <p class="eyebrow">Benchmark · Steady-State Throughput &amp; Step Latency (Batch Size = 256)</p>
-    <h1>KERAS_BACKEND=jax (OpenXLA) Delivers 1.92x Faster Training and 1.84x Faster Inference</h1>
+    <h1>Keras-jax jit (CPU) vs Keras-torch eager (MPS) · 2.00x train, 1.82x eval</h1>
 
     <div class="diagram-container">
       <svg viewBox="0 0 1000 540" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="jax-torch-bar-title jax-torch-bar-desc">
         <title id="jax-torch-bar-title">Keras 3 JAX vs PyTorch Steady-State Throughput</title>
-        <desc id="jax-torch-bar-desc">Column bar chart comparing steady-state samples per second and step latency in milliseconds between KERAS_BACKEND=jax with OpenXLA and KERAS_BACKEND=torch on the 657,418-parameter multimodal residual model.</desc>
+        <desc id="jax-torch-bar-desc">Column bar chart comparing steady-state samples per second and step latency in milliseconds between KERAS_BACKEND=jax compiled on CPU and KERAS_BACKEND=torch eager on Apple MPS on the 657,418-parameter multimodal residual model.</desc>
 
         <rect width="100%" height="100%" fill="#F7F6F2"/>
 
@@ -93,42 +93,42 @@
         <text x="80" y="403" fill="#3B5B8C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="end">0</text>
 
         <!-- Bar 1: JAX Train (train_on_batch) = 23,539.6 samples/s (10.875 ms/step) -> height=141, y=259 (Focal 1) -->
-        <rect x="136" y="260" width="96" height="140" fill="#F7F6F2"/>
-        <rect x="136" y="260" width="96" height="140" fill="rgba(197,146,22,0.12)" stroke="#C59216" stroke-width="1.5"/>
-        <text x="184" y="250" fill="#9A6F0B" font-size="9" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">23,539.6 /s</text>
-        <text x="184" y="238" fill="#3B5B8C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">10.875 ms/step (1.92x)</text>
+        <rect x="136" y="251.2" width="96" height="148.8" fill="#F7F6F2"/>
+        <rect x="136" y="251.2" width="96" height="148.8" fill="rgba(197,146,22,0.12)" stroke="#C59216" stroke-width="1.5"/>
+        <text x="184" y="241.2" fill="#9A6F0B" font-size="9" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">24,794.8 /s</text>
+        <text x="184" y="229.2" fill="#3B5B8C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">10.325 ms/step (2.00x)</text>
         <text x="184" y="422" fill="#0F2547" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">JAX Train</text>
         <text x="184" y="436" fill="#9A6F0B" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">KERAS_BACKEND=jax</text>
 
         <!-- Bar 2: PyTorch Train (train_on_batch) = 12,252.2 samples/s (20.894 ms/step) -> height=72, y=328 -->
-        <rect x="284" y="328" width="96" height="72" fill="#F7F6F2"/>
-        <rect x="284" y="328" width="96" height="72" fill="rgba(59,91,140,0.15)" stroke="#3B5B8C" stroke-width="1"/>
-        <text x="332" y="316" fill="#0F2547" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">12,252.2 /s</text>
-        <text x="332" y="304" fill="#3B5B8C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">20.894 ms/step (1.00x)</text>
+        <rect x="284" y="325.6" width="96" height="74.4" fill="#F7F6F2"/>
+        <rect x="284" y="325.6" width="96" height="74.4" fill="rgba(59,91,140,0.15)" stroke="#3B5B8C" stroke-width="1"/>
+        <text x="332" y="315.6" fill="#0F2547" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">12,401.3 /s</text>
+        <text x="332" y="303.6" fill="#3B5B8C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">20.643 ms/step (1.00x)</text>
         <text x="332" y="422" fill="#0F2547" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">PyTorch Train</text>
         <text x="332" y="436" fill="#3B5B8C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">KERAS_BACKEND=torch</text>
 
         <!-- Bar 3: JAX Custom Stateless Loop = 23,734.5 samples/s (10.786 ms/step) -> height=144, y=256 -->
-        <rect x="448" y="256" width="96" height="144" fill="#F7F6F2"/>
-        <rect x="448" y="256" width="96" height="144" fill="rgba(59,91,140,0.15)" stroke="#0F2547" stroke-width="1.2"/>
-        <text x="496" y="248" fill="#0F2547" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">23,734.5 /s</text>
-        <text x="496" y="236" fill="#3B5B8C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">10.786 ms/step (1.94x)</text>
+        <rect x="448" y="244.3" width="96" height="155.7" fill="#F7F6F2"/>
+        <rect x="448" y="244.3" width="96" height="155.7" fill="rgba(59,91,140,0.15)" stroke="#0F2547" stroke-width="1.2"/>
+        <text x="496" y="234.3" fill="#0F2547" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">25,946.4 /s</text>
+        <text x="496" y="222.3" fill="#3B5B8C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">9.866 ms/step (SGD)</text>
         <text x="496" y="422" fill="#0F2547" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">JAX Stateless</text>
         <text x="496" y="436" fill="#3B5B8C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">value_and_grad</text>
 
         <!-- Bar 4: JAX Eval (test_on_batch) = 52,708.9 samples/s (4.857 ms/step) -> height=316, y=84 (Focal 2) -->
-        <rect x="628" y="84" width="96" height="316" fill="#F7F6F2"/>
-        <rect x="628" y="84" width="96" height="316" fill="rgba(197,146,22,0.12)" stroke="#C59216" stroke-width="1.5"/>
-        <text x="676" y="74" fill="#9A6F0B" font-size="9" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">52,708.9 /s</text>
-        <text x="676" y="62" fill="#3B5B8C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">4.857 ms/step (1.84x)</text>
+        <rect x="628" y="67.1" width="96" height="332.9" fill="#F7F6F2"/>
+        <rect x="628" y="67.1" width="96" height="332.9" fill="rgba(197,146,22,0.12)" stroke="#C59216" stroke-width="1.5"/>
+        <text x="676" y="57.1" fill="#9A6F0B" font-size="9" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">55,482.9 /s</text>
+        <text x="676" y="45.1" fill="#3B5B8C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">4.614 ms/step (1.82x)</text>
         <text x="676" y="422" fill="#0F2547" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">JAX Inference</text>
         <text x="676" y="436" fill="#9A6F0B" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">KERAS_BACKEND=jax</text>
 
         <!-- Bar 5: PyTorch Eval (test_on_batch) = 28,586.9 samples/s (8.955 ms/step) -> height=172, y=228 -->
-        <rect x="776" y="228" width="96" height="172" fill="#F7F6F2"/>
-        <rect x="776" y="228" width="96" height="172" fill="rgba(59,91,140,0.15)" stroke="#3B5B8C" stroke-width="1"/>
-        <text x="824" y="218" fill="#0F2547" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">28,586.9 /s</text>
-        <text x="824" y="206" fill="#3B5B8C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">8.955 ms/step (1.00x)</text>
+        <rect x="776" y="217.4" width="96" height="182.6" fill="#F7F6F2"/>
+        <rect x="776" y="217.4" width="96" height="182.6" fill="rgba(59,91,140,0.15)" stroke="#3B5B8C" stroke-width="1"/>
+        <text x="824" y="207.4" fill="#0F2547" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">30,435.1 /s</text>
+        <text x="824" y="195.4" fill="#3B5B8C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">8.411 ms/step (1.00x)</text>
         <text x="824" y="422" fill="#0F2547" font-size="11" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">PyTorch Inference</text>
         <text x="824" y="436" fill="#3B5B8C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">KERAS_BACKEND=torch</text>
 
@@ -144,10 +144,10 @@
         <text x="136" y="496" fill="#0F2547" font-size="9" font-family="'Geist', sans-serif">KERAS_BACKEND=jax (OpenXLA JIT)</text>
 
         <rect x="348" y="488" width="12" height="10" rx="2" fill="rgba(59,91,140,0.15)" stroke="#0F2547" stroke-width="1.2"/>
-        <text x="368" y="496" fill="#0F2547" font-size="9" font-family="'Geist', sans-serif">Custom Stateless JAX (value_and_grad)</text>
+        <text x="368" y="496" fill="#0F2547" font-size="9" font-family="'Geist', sans-serif">Custom Stateless JAX (SGD, not comparable)</text>
 
         <rect x="596" y="488" width="12" height="10" rx="2" fill="rgba(59,91,140,0.15)" stroke="#3B5B8C" stroke-width="1"/>
-        <text x="616" y="496" fill="#0F2547" font-size="9" font-family="'Geist', sans-serif">KERAS_BACKEND=torch (Eager Baseline)</text>
+        <text x="616" y="496" fill="#0F2547" font-size="9" font-family="'Geist', sans-serif">KERAS_BACKEND=torch (eager, MPS)</text>
       </svg>
     </div>
   </div>
