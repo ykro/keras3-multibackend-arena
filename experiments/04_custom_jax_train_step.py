@@ -103,7 +103,8 @@ def run_stateless_jax_training(
     )
 
     mean_step_ms = float(np.mean(step_latencies_ms))
-    train_throughput = float(batch_size / (mean_step_ms / 1000.0))
+    p50_step_ms = float(np.median(step_latencies_ms))
+    train_throughput = float(batch_size / (p50_step_ms / 1000.0))
 
     return {
         "warmup_compile_ms": round(warmup_compile_ms, 2),
@@ -114,6 +115,7 @@ def run_stateless_jax_training(
         "final_acc": round(float(acc_val), 4),
         "final_grad_norm": round(float(gnorm_val), 4),
         "mean_step_ms": round(mean_step_ms, 3),
+        "step_p50_ms": round(p50_step_ms, 3),
         "train_throughput_samples_sec": round(train_throughput, 1),
     }
 
@@ -124,7 +126,7 @@ def main() -> None:
     print(f"Initial loss -> Final loss : {metrics['initial_loss']:.5f} -> {metrics['final_loss']:.5f}")
     print(f"Stateful model verify loss : {metrics['stateful_verify_loss']:.5f}")
     print(f"Initial acc  -> Final acc  : {metrics['initial_acc']:.2%} -> {metrics['final_acc']:.2%}")
-    print(f"Mean stateless step latency: {metrics['mean_step_ms']:.3f} ms")
+    print(f"Stateless step (median)    : {metrics['step_p50_ms']:.3f} ms (SGD + clipping, not AdamW)")
 
 
 if __name__ == "__main__":

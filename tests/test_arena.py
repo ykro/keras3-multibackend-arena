@@ -49,11 +49,14 @@ def test_export_and_http_serve_smoke() -> None:
     assert res["artifact_size_kb"] > 100
 
 
-def test_latest_benchmark_results_exist_and_jax_wins() -> None:
+def test_latest_benchmark_results_record_all_configs() -> None:
     json_path = Path(__file__).resolve().parent.parent / "benchmarks" / "latest_results.json"
     if not json_path.exists():
         verify_arena.main()
     data = json.loads(json_path.read_text(encoding="utf-8"))
-    jax_tp = data["arena"]["jax"]["train_throughput_samples_sec"]
-    torch_tp = data["arena"]["torch"]["train_throughput_samples_sec"]
-    assert jax_tp > torch_tp
+    for name in ("jax", "torch", "torch-cpu"):
+        row = data["arena"][name]
+        assert row["train_step_p50_ms"] > 0 and row["eval_step_p50_ms"] > 0
+        assert row["device"]
+    assert data["arena"]["torch-cpu"]["device"] == "cpu"
+    assert "load_average_before" in data["environment"]

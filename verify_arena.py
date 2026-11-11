@@ -4,10 +4,12 @@ Verifies:
 1. Subprocess isolation across `KERAS_BACKEND=jax`, `KERAS_BACKEND=torch`, and `KERAS_BACKEND=numpy`.
 2. Weight portability through a `.keras` file: saves under `jax` and reloads in `torch` and `numpy`
    with `np.allclose(atol=1e-5)`.
-3. Steady-state training & inference throughput of `KERAS_BACKEND=jax` (jit-compiled) against
-   `KERAS_BACKEND=torch` in eager mode (no `torch.compile`, Keras default torch device).
-4. OpenXLA HLO fusion verification and custom `model.stateless_call` + `jax.value_and_grad`
-   loss convergence.
+3. Steady-state training & inference latency of `KERAS_BACKEND=jax` (jit-compiled, CPU) against
+   `KERAS_BACKEND=torch` in eager mode (no `torch.compile`) on the Keras default torch device and,
+   for a like-for-like row, pinned to the same CPU (`KERAS_TORCH_DEVICE=cpu`). Speedups are reported,
+   never asserted: they depend on the machine and its load, which the report records.
+4. Eager vs `jax.jit` on the same forward (real HLO fusion instructions) and the custom
+   `model.stateless_call` + `jax.value_and_grad` loop (loss must decrease).
 5. Writes real results to `benchmarks/latest_results.json` and `benchmarks/terminal_output.txt`.
 """
 
@@ -16,6 +18,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
@@ -92,52 +95,90 @@ def verify_cross_backend_portability() -> dict:
     }
 
 
+def _load_average() -> float:
+    return round(os.getloadavg()[0], 1)
+
+
+def _cpu_name() -> str:
+    try:
+        out = subprocess.run(
+            ["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True, check=True
+        )
+        return out.stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return platform.processor() or platform.machine()
+
+
+def _backend_check_lines() -> list[str]:
+    """Experiment 01 in the same run: one subprocess per backend builds the same class."""
+    lines = []
+    for backend_name in ("jax", "torch", "numpy"):
+        env = os.environ.copy()
+        env["KERAS_BACKEND"] = backend_name
+        cmd = [sys.executable, str(ROOT_DIR / "experiments" / "01_backend_agnostic_model.py"), "--child"]
+        res = subprocess.run(cmd, env=env, capture_output=True, text=True, check=True)
+        lines.append(res.stdout.strip())
+    return lines
+
+
 def main() -> None:
     if "--child-portability" in sys.argv:
         idx = sys.argv.index("--child-portability")
         _child_save_or_eval(sys.argv[idx + 1], sys.argv[idx + 2], sys.argv[idx + 3])
         return
 
+    import jax
+    import keras
+    import torch
+
     mod02 = importlib.import_module("experiments.02_arena_jax_vs_torch")
     mod03 = importlib.import_module("experiments.03_xla_fusion_analysis")
     mod04 = importlib.import_module("experiments.04_custom_jax_train_step")
     mod05 = importlib.import_module("experiments.05_export_and_serve")
 
+    load_before = _load_average()
+    backend_lines = _backend_check_lines()
     portability = verify_cross_backend_portability()
     arena = mod02.run_arena_benchmarks(batch_size=256, steps=45)
     fusion = mod03.analyze_xla_fusion(batch_size=256, steps=50)
     stateless = mod04.run_stateless_jax_training(batch_size=256, steps=30)
     serving = mod05.run_smoke_test()
+    load_after = _load_average()
 
-    jax_train_tp = arena["jax"]["train_throughput_samples_sec"]
-    torch_train_tp = arena["torch"]["train_throughput_samples_sec"]
-    jax_eval_tp = arena["jax"]["eval_throughput_samples_sec"]
-    torch_eval_tp = arena["torch"]["eval_throughput_samples_sec"]
-
-    assert jax_train_tp > torch_train_tp, (
-        f"Expected JAX train throughput ({jax_train_tp}) > Torch ({torch_train_tp})"
-    )
-    assert jax_eval_tp > torch_eval_tp, (
-        f"Expected JAX eval throughput ({jax_eval_tp}) > Torch ({torch_eval_tp})"
-    )
+    # Correctness checks (these must hold on any machine). Speedups are measured, not asserted.
+    assert len({ln.split("params=")[1] for ln in backend_lines}) == 1, "Backends built different models"
     assert stateless["final_loss"] < stateless["initial_loss"], (
         "Expected custom stateless JAX training step to decrease loss"
     )
+    assert fusion["hlo_dot_ops"] == 20, "Expected one dot per matmul of the model (20)"
+    assert serving["backend"] == "jax" and 0 <= serving["predicted_class"] < 10
 
-    train_speedup = round(jax_train_tp / torch_train_tp, 2)
-    eval_speedup = round(jax_eval_tp / torch_eval_tp, 2)
-    stateless["speedup_vs_torch_train"] = round(
-        stateless["train_throughput_samples_sec"] / torch_train_tp, 2
-    )
+    jax_m = arena["jax"]
+    ratios = {
+        name: {
+            "train": round(arena[name]["train_step_p50_ms"] / jax_m["train_step_p50_ms"], 2),
+            "eval": round(arena[name]["eval_step_p50_ms"] / jax_m["eval_step_p50_ms"], 2),
+        }
+        for name in ("torch", "torch-cpu")
+    }
 
+    env_info = {
+        "cpu": _cpu_name(),
+        "cores": os.cpu_count(),
+        "load_average_before": load_before,
+        "load_average_after": load_after,
+        "versions": {"keras": keras.__version__, "jax": jax.__version__, "torch": torch.__version__},
+    }
     summary = {
         "project": "keras3-multibackend-arena",
+        "environment": env_info,
+        "backend_check": backend_lines,
         "portability": portability,
         "arena": {
-            "jax": arena["jax"],
-            "torch": arena["torch"],
-            "jax_vs_torch_train_speedup": train_speedup,
-            "jax_vs_torch_eval_speedup": eval_speedup,
+            **arena,
+            "jax_vs_torch_default_device": ratios["torch"],
+            "jax_vs_torch_cpu": ratios["torch-cpu"],
+            "statistic": "median step latency after 4 warmup steps (45 timed steps)",
         },
         "xla_fusion": fusion,
         "stateless_custom_loop": stateless,
@@ -148,54 +189,68 @@ def main() -> None:
     bench_dir.mkdir(parents=True, exist_ok=True)
     json_path = bench_dir / "latest_results.json"
     txt_path = bench_dir / "terminal_output.txt"
-
     json_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
 
+    rule = "-" * 90
+    dev = {name: m["device"] for name, m in arena.items()}
     lines = [
-        "==========================================================================================",
+        "=" * 90,
         "KERAS 3 MULTI-BACKEND ARENA — OUTSIDE JUDGE VERIFICATION REPORT",
-        "==========================================================================================",
-        f"Model Parameters               : {arena['jax']['params']:,}",
-        f"Batch Size / Steps             : {arena['jax']['batch_size']} / {arena['jax']['steps']}",
+        "=" * 90,
+        f"CPU      : {env_info['cpu']}, {env_info['cores']} cores, load average {load_before} before, {load_after} after",
+        f"Versions : keras {keras.__version__}, jax {jax.__version__}, torch {torch.__version__}",
+        f"Model    : {jax_m['params']:,} parameters, batch {jax_m['batch_size']}, {jax_m['steps']} timed steps (median)",
+        rule,
+        "01. One class, three backends (each backend initializes its own random weights)",
+        *[f"    {ln}" for ln in backend_lines],
         (
-            f"Cross-Backend Weight Parity    : PASS (max |JAX - Torch| = {portability['max_abs_diff_jax_vs_torch']:.2e}, "
-            f"max |JAX - NumPy| = {portability['max_abs_diff_jax_vs_numpy']:.2e})"
+            f"    Weight parity via .keras (saved on jax): PASS, max |jax - torch| = "
+            f"{portability['max_abs_diff_jax_vs_torch']:.2e}, max |jax - numpy| = "
+            f"{portability['max_abs_diff_jax_vs_numpy']:.2e} (atol 1e-5)"
         ),
-        "------------------------------------------------------------------------------------------",
+        rule,
+        "02. Arena: same model, AdamW, train_on_batch / test_on_batch",
+        f"    {'Config':<10} | {'Mode':<16} | {'Device':<6} | {'First step':>10} | {'Train p50':>10} | {'Eval p50':>9}",
+        *[
+            (
+                f"    {name:<10} | {('jit (XLA)' if m['jit_compile'] else 'eager'):<16} | {m['device']:<6} | "
+                f"{m['warmup_compile_ms']:>7.0f} ms | {m['train_step_p50_ms']:>7.2f} ms | {m['eval_step_p50_ms']:>6.2f} ms"
+            )
+            for name, m in arena.items()
+        ],
         (
-            f"{'Backend':<12} | {'Warmup (ms)':>12} | {'Train Step (ms)':>15} | "
-            f"{'Train (samples/s)':>17} | {'Eval Step (ms)':>14} | {'Eval (samples/s)':>16}"
-        ),
-        "------------------------------------------------------------------------------------------",
-        (
-            f"{'jax (XLA)':<12} | {arena['jax']['warmup_compile_ms']:>12.2f} | "
-            f"{arena['jax']['train_step_mean_ms']:>15.3f} | "
-            f"{arena['jax']['train_throughput_samples_sec']:>17.1f} | "
-            f"{arena['jax']['eval_step_mean_ms']:>14.3f} | "
-            f"{arena['jax']['eval_throughput_samples_sec']:>16.1f}"
-        ),
-        (
-            f"{'torch (eager)':<12} | {arena['torch']['warmup_compile_ms']:>12.2f} | "
-            f"{arena['torch']['train_step_mean_ms']:>15.3f} | "
-            f"{arena['torch']['train_throughput_samples_sec']:>17.1f} | "
-            f"{arena['torch']['eval_step_mean_ms']:>14.3f} | "
-            f"{arena['torch']['eval_throughput_samples_sec']:>16.1f}"
-        ),
-        "------------------------------------------------------------------------------------------",
-        f"Keras-jax jit vs torch eager   : {train_speedup:.2f}x train | {eval_speedup:.2f}x eval (torch on Keras default device)",
-        (
-            f"HLO text, 'fusion' substrings  : {fusion['hlo_fusion_ops']} in {fusion['hlo_lines']} HLO lines "
-            f"(forward {fusion['eager_forward_ms']:.3f} ms eager -> {fusion['xla_jit_forward_ms']:.3f} ms jit, {fusion['xla_fusion_speedup']:.2f}x)"
+            f"    jax jit (cpu) vs torch eager ({dev['torch']}) : {ratios['torch']['train']:.2f}x train | "
+            f"{ratios['torch']['eval']:.2f}x eval  (different processors)"
         ),
         (
-            f"Stateless jax.value_and_grad   : loss {stateless['initial_loss']:.5f} -> {stateless['final_loss']:.5f} "
-            f"(acc {stateless['initial_acc']:.2%} -> {stateless['final_acc']:.2%}, {stateless['mean_step_ms']:.3f} ms/step)"
+            f"    jax jit (cpu) vs torch eager (cpu) : {ratios['torch-cpu']['train']:.2f}x train | "
+            f"{ratios['torch-cpu']['eval']:.2f}x eval  (same processor, still jit vs eager)"
+        ),
+        rule,
+        "03. Same backend (jax), same CPU, same forward: eager vs jax.jit",
+        (
+            f"    {fusion['jaxpr_primitive_ops']} primitive ops dispatched one by one in eager -> "
+            f"{fusion['hlo_fusion_instructions']} fusion instructions + {fusion['hlo_dot_ops']} dots in the compiled HLO"
         ),
         (
-            f"Local HTTP smoke test          : status=200, model() latency={serving['latency_ms']:.3f} ms, "
-            f"artifact={serving['artifact_size_kb']} KB"
+            f"    forward {fusion['eager_forward_ms']:.2f} ms eager -> {fusion['xla_jit_forward_ms']:.2f} ms jit: "
+            f"{fusion['jit_vs_eager_forward_speedup']:.2f}x"
         ),
-        "==========================================================================================",
+        rule,
+        "04. model.stateless_call + jax.value_and_grad, 30 steps on one synthetic batch (SGD + clipping)",
+        (
+            f"    loss {stateless['initial_loss']:.4f} -> {stateless['final_loss']:.4f}, "
+            f"acc {stateless['initial_acc']:.2%} -> {stateless['final_acc']:.2%} (same batch it trains on), "
+            f"{stateless['step_p50_ms']:.2f} ms/step"
+        ),
+        rule,
+        "05. .keras export + local HTTP smoke test (127.0.0.1, not Cloud Run)",
+        (
+            f"    status=200, eager model() inside the handler = {serving['latency_ms']:.2f} ms, "
+            f"artifact = {serving['artifact_size_kb']} KB (weights + AdamW state)"
+        ),
+        "=" * 90,
+        "ALL CORRECTNESS CHECKS PASSED. Speedups are measurements of this machine and load.",
     ]
     report = "\n".join(lines)
     txt_path.write_text(report + "\n", encoding="utf-8")

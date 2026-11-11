@@ -1,4 +1,4 @@
-"""Experiment 03: XLA Kernel Fusion Analysis on Keras 3 JAX Backend.
+"""Experiment 03: XLA Kernel Fusion Analysis on Keras 3 JAX Backend (eager vs jit, same CPU).
 
 Inspects the OpenXLA HLO lowered and compiled program for `GatedResidualBlock`
 and measures the latency difference between eager op-by-op dispatch and
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -47,9 +48,26 @@ def analyze_xla_fusion(batch_size: int = 256, steps: int = 50) -> dict:
     compiled = lowered.compile()
     hlo_text = compiled.as_text()
 
-    fusion_count = hlo_text.count("fusion")
+    # `hlo_text.count("fusion")` counts a substring that each fusion repeats in its name, its opcode and
+    # every use; the real number of fused kernels is the number of `fusion(` instructions.
+    fusion_substring_count = hlo_text.count("fusion")
+    fusion_instructions = len(re.findall(r"=\s*\S+\s+fusion\(", hlo_text))
     custom_call_count = hlo_text.count("custom-call")
     dot_count = hlo_text.count("dot(")
+
+    # Primitive operations that eager mode dispatches one by one (the jaxpr equations, nested ones included).
+    def _count_eqns(jaxpr) -> int:
+        n = 0
+        for eqn in jaxpr.eqns:
+            subs = [v for v in eqn.params.values() if hasattr(v, "jaxpr") or hasattr(v, "eqns")]
+            if subs:
+                n += sum(_count_eqns(getattr(v, "jaxpr", v)) for v in subs)
+            else:
+                n += 1
+        return n
+
+    closed = jax.make_jaxpr(pure_forward)(trainable_vars, non_trainable_vars, vis_jax, tab_jax)
+    primitive_ops = _count_eqns(closed.jaxpr)
 
     # Warmup both paths
     _ = pure_forward(trainable_vars, non_trainable_vars, vis_jax, tab_jax).block_until_ready()
@@ -69,30 +87,32 @@ def analyze_xla_fusion(batch_size: int = 256, steps: int = 50) -> dict:
         out.block_until_ready()
         jit_times.append((time.perf_counter() - t0) * 1000.0)
 
-    eager_ms = float(np.mean(eager_times))
-    jit_ms = float(np.mean(jit_times))
+    eager_ms = float(np.median(eager_times))
+    jit_ms = float(np.median(jit_times))
     fusion_speedup = eager_ms / jit_ms
 
     return {
         "hlo_lines": len(hlo_text.splitlines()),
-        "hlo_fusion_ops": fusion_count,
+        "jaxpr_primitive_ops": primitive_ops,
+        "hlo_fusion_instructions": fusion_instructions,
+        "hlo_fusion_substring_count": fusion_substring_count,
         "hlo_dot_ops": dot_count,
         "hlo_custom_calls": custom_call_count,
         "eager_forward_ms": round(eager_ms, 3),
         "xla_jit_forward_ms": round(jit_ms, 3),
-        "xla_fusion_speedup": round(fusion_speedup, 2),
+        "jit_vs_eager_forward_speedup": round(fusion_speedup, 2),
     }
 
 
 def main() -> None:
-    print("=== Experiment 03: OpenXLA Kernel Fusion Analysis (KERAS_BACKEND=jax) ===")
+    print("=== Experiment 03: eager vs jax.jit on the same forward (KERAS_BACKEND=jax, same CPU) ===")
     stats = analyze_xla_fusion(batch_size=256, steps=50)
-    print(f"HLO program lines        : {stats['hlo_lines']}")
-    print(f"HLO fusion occurrences   : {stats['hlo_fusion_ops']}")
-    print(f"HLO dot/matmul ops       : {stats['hlo_dot_ops']}")
-    print(f"Eager op-by-op latency   : {stats['eager_forward_ms']:.3f} ms")
-    print(f"OpenXLA fused latency    : {stats['xla_jit_forward_ms']:.3f} ms")
-    print(f"OpenXLA fusion speedup   : {stats['xla_fusion_speedup']:.2f}x")
+    print(f"Primitive ops (eager)    : {stats['jaxpr_primitive_ops']}")
+    print(f"HLO fusion instructions  : {stats['hlo_fusion_instructions']}")
+    print(f"HLO dot (matmul) ops     : {stats['hlo_dot_ops']}")
+    print(f"Eager forward (median)   : {stats['eager_forward_ms']:.3f} ms")
+    print(f"jax.jit forward (median) : {stats['xla_jit_forward_ms']:.3f} ms")
+    print(f"jit vs eager, forward    : {stats['jit_vs_eager_forward_speedup']:.2f}x")
 
 
 if __name__ == "__main__":

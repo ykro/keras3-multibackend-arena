@@ -89,6 +89,9 @@ python experiments/05_export_and_serve.py
 # Ejecutar el Juez Externo, ruff y pytest en un solo comando
 make all
 
+# Lo mismo, y además el reporte de cada experimento, todo de una sola corrida
+make report
+
 # Scripts preparados (sin resultados publicados todavía) para Vertex AI (GPU NVIDIA L4) y Cloud Run (--min-instances=0)
 bash gcp/run_vertex_l4_arena.sh
 bash gcp/deploy_cloud_run.sh

@@ -1,17 +1,32 @@
 ==========================================================================================
 KERAS 3 MULTI-BACKEND ARENA — OUTSIDE JUDGE VERIFICATION REPORT
 ==========================================================================================
-Model Parameters               : 657,418
-Batch Size / Steps             : 256 / 45
-Cross-Backend Weight Parity    : PASS (max |JAX - Torch| = 2.98e-07, max |JAX - NumPy| = 4.17e-07)
+CPU      : Apple M1 Max, 10 cores, load average 8.2 before, 6.8 after
+Versions : keras 3.15.1, jax 0.12.0.1, torch 2.15.0
+Model    : 657,418 parameters, batch 256, 45 timed steps (median)
 ------------------------------------------------------------------------------------------
-Backend      |  Warmup (ms) | Train Step (ms) | Train (samples/s) | Eval Step (ms) | Eval (samples/s)
+01. One class, three backends (each backend initializes its own random weights)
+    [backend=jax  ] output_shape=(8, 10) row0_sum=1.000000 row0_max=0.502002 params=657,418
+    [backend=torch] output_shape=(8, 10) row0_sum=1.000000 row0_max=0.373826 params=657,418
+    [backend=numpy] output_shape=(8, 10) row0_sum=1.000000 row0_max=0.218431 params=657,418
+    Weight parity via .keras (saved on jax): PASS, max |jax - torch| = 2.98e-07, max |jax - numpy| = 4.17e-07 (atol 1e-5)
 ------------------------------------------------------------------------------------------
-jax (XLA)    |       659.84 |          10.325 |           24794.8 |          4.614 |          55482.9
-torch (eager) |       159.03 |          20.643 |           12401.3 |          8.411 |          30435.1
+02. Arena: same model, AdamW, train_on_batch / test_on_batch
+    Config     | Mode             | Device | First step |  Train p50 |  Eval p50
+    jax        | jit (XLA)        | cpu    |     617 ms |    9.67 ms |   4.19 ms
+    torch      | eager            | mps    |     154 ms |   19.13 ms |   7.81 ms
+    torch-cpu  | eager            | cpu    |      49 ms |   20.13 ms |   6.65 ms
+    jax jit (cpu) vs torch eager (mps) : 1.98x train | 1.86x eval  (different processors)
+    jax jit (cpu) vs torch eager (cpu) : 2.08x train | 1.59x eval  (same processor, still jit vs eager)
 ------------------------------------------------------------------------------------------
-Keras-jax jit vs torch eager   : 2.00x train | 1.82x eval (torch on Keras default device)
-HLO text, 'fusion' substrings  : 249 in 1026 HLO lines (forward 7.176 ms eager -> 4.065 ms jit, 1.77x)
-Stateless jax.value_and_grad   : loss 2.63890 -> 0.69450 (acc 12.11% -> 91.41%, 9.866 ms/step)
-Local HTTP smoke test          : status=200, model() latency=4.167 ms, artifact=7787.6 KB
+03. Same backend (jax), same CPU, same forward: eager vs jax.jit
+    207 primitive ops dispatched one by one in eager -> 60 fusion instructions + 20 dots in the compiled HLO
+    forward 6.01 ms eager -> 3.76 ms jit: 1.60x
+------------------------------------------------------------------------------------------
+04. model.stateless_call + jax.value_and_grad, 30 steps on one synthetic batch (SGD + clipping)
+    loss 2.6389 -> 0.6945, acc 12.11% -> 91.41% (same batch it trains on), 9.17 ms/step
+------------------------------------------------------------------------------------------
+05. .keras export + local HTTP smoke test (127.0.0.1, not Cloud Run)
+    status=200, eager model() inside the handler = 3.93 ms, artifact = 7787.6 KB (weights + AdamW state)
 ==========================================================================================
+ALL CORRECTNESS CHECKS PASSED. Speedups are measurements of this machine and load.

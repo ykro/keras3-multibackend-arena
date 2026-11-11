@@ -1,9 +1,16 @@
 """Experiment 02: Arena Benchmark — KERAS_BACKEND=jax vs KERAS_BACKEND=torch.
 
 Executes isolated subprocess benchmarks training and evaluating the identical
-Keras 3 model under JAX (OpenXLA) and PyTorch backends. Measures first-step
-compilation/warmup overhead, steady-state step latency (ms), and throughput
-(samples/sec).
+Keras 3 model in three configurations:
+
+- `jax`        : Keras-jax, `jit_compile=True` (the whole train step compiled by XLA), on the JAX CPU device.
+- `torch`      : Keras-torch eager (no `torch.compile`) on the Keras default torch device
+                 (MPS, the integrated GPU, on Apple Silicon; CUDA on NVIDIA; else CPU).
+- `torch-cpu`  : Keras-torch eager pinned to the CPU with `KERAS_TORCH_DEVICE=cpu`,
+                 the same processor JAX uses. This is the like-for-like row.
+
+Measures the first step (tracing/compilation or warmup), and the median steady-state
+step latency (ms) and throughput (samples/sec). Medians, because the laptop is shared.
 """
 
 from __future__ import annotations
@@ -73,7 +80,7 @@ def _run_worker(batch_size: int = 256, steps: int = 45) -> dict:
     mean_step_ms = float(np.mean(step_times_ms))
     p50_step_ms = float(np.percentile(step_times_ms, 50))
     p95_step_ms = float(np.percentile(step_times_ms, 95))
-    throughput = float(batch_size / (mean_step_ms / 1000.0))
+    throughput = float(batch_size / (p50_step_ms / 1000.0))
 
     # Inference latency measurement
     _ = model.test_on_batch([vis, tab], y, return_dict=True)
@@ -85,10 +92,22 @@ def _run_worker(batch_size: int = 256, steps: int = 45) -> dict:
         infer_times_ms.append((time.perf_counter() - ts) * 1000.0)
 
     mean_infer_ms = float(np.mean(infer_times_ms))
-    infer_throughput = float(batch_size / (mean_infer_ms / 1000.0))
+    p50_infer_ms = float(np.percentile(infer_times_ms, 50))
+    infer_throughput = float(batch_size / (p50_infer_ms / 1000.0))
+
+    if keras.backend.backend() == "jax":
+        import jax
+
+        device = jax.devices()[0].platform
+    else:
+        from keras.src.backend.torch import core as torch_core
+
+        device = str(torch_core.get_device())
 
     return {
         "backend": keras.backend.backend(),
+        "device": device,
+        "jit_compile": keras.backend.backend() == "jax",
         "batch_size": batch_size,
         "steps": steps,
         "params": int(model.count_params()),
@@ -98,17 +117,29 @@ def _run_worker(batch_size: int = 256, steps: int = 45) -> dict:
         "train_step_p95_ms": round(p95_step_ms, 3),
         "train_throughput_samples_sec": round(throughput, 1),
         "eval_step_mean_ms": round(mean_infer_ms, 3),
+        "eval_step_p50_ms": round(p50_infer_ms, 3),
         "eval_throughput_samples_sec": round(infer_throughput, 1),
         "final_loss": round(final_loss, 5),
     }
 
 
+# name -> (KERAS_BACKEND, KERAS_TORCH_DEVICE or None for the Keras default)
+ARENA_CONFIGS: dict[str, tuple[str, str | None]] = {
+    "jax": ("jax", None),
+    "torch": ("torch", None),
+    "torch-cpu": ("torch", "cpu"),
+}
+
+
 def run_arena_benchmarks(batch_size: int = 256, steps: int = 45) -> dict[str, dict]:
-    """Runs isolated subprocesses for jax and torch backends and returns metrics."""
+    """Runs one isolated subprocess per arena configuration and returns metrics."""
     results: dict[str, dict] = {}
-    for backend_name in ("jax", "torch"):
+    for name, (backend_name, torch_device) in ARENA_CONFIGS.items():
         env = os.environ.copy()
         env["KERAS_BACKEND"] = backend_name
+        env.pop("KERAS_TORCH_DEVICE", None)
+        if torch_device:
+            env["KERAS_TORCH_DEVICE"] = torch_device
         cmd = [
             sys.executable,
             __file__,
@@ -121,7 +152,7 @@ def run_arena_benchmarks(batch_size: int = 256, steps: int = 45) -> dict[str, di
         proc = subprocess.run(cmd, env=env, capture_output=True, text=True, check=True)
         line = [ln for ln in proc.stdout.splitlines() if ln.startswith("ARENA_JSON:")][-1]
         payload = json.loads(line.removeprefix("ARENA_JSON:"))
-        results[backend_name] = payload
+        results[name] = payload
     return results
 
 
@@ -135,33 +166,28 @@ def main() -> None:
         print("ARENA_JSON:" + json.dumps(metrics))
         return
 
-    print("=== Experiment 02: Keras 3 Multi-Backend Arena (JAX vs PyTorch) ===")
+    print("=== Experiment 02: Keras 3 Multi-Backend Arena (same model, three configurations) ===")
     results = run_arena_benchmarks(batch_size=256, steps=45)
-    jax_m = results["jax"]
-    torch_m = results["torch"]
-    speedup_train = jax_m["train_throughput_samples_sec"] / torch_m["train_throughput_samples_sec"]
-    speedup_eval = jax_m["eval_throughput_samples_sec"] / torch_m["eval_throughput_samples_sec"]
-
     print(
-        f"{'Backend':<10} | {'Warmup (ms)':>12} | {'Train Step (ms)':>15} | "
-        f"{'Train (img/s)':>14} | {'Eval Step (ms)':>14} | {'Eval (img/s)':>13}"
+        f"{'Config':<10} | {'Device':>6} | {'First step (ms)':>15} | {'Train p50 (ms)':>14} | "
+        f"{'Train (samples/s)':>17} | {'Eval p50 (ms)':>13}"
     )
     print("-" * 92)
-    for b_name in ("jax", "torch"):
-        m = results[b_name]
+    for name, m in results.items():
         print(
-            f"{m['backend']:<10} | {m['warmup_compile_ms']:>12.2f} | "
-            f"{m['train_step_mean_ms']:>15.3f} | "
-            f"{m['train_throughput_samples_sec']:>14.1f} | "
-            f"{m['eval_step_mean_ms']:>14.3f} | "
-            f"{m['eval_throughput_samples_sec']:>13.1f}"
+            f"{name:<10} | {m['device']:>6} | {m['warmup_compile_ms']:>15.2f} | "
+            f"{m['train_step_p50_ms']:>14.3f} | {m['train_throughput_samples_sec']:>17.1f} | "
+            f"{m['eval_step_p50_ms']:>13.3f}"
         )
     print("-" * 92)
-    print(
-        f"Steady-state speedup (KERAS_BACKEND=jax vs torch): "
-        f"Train = {speedup_train:.2f}x | Eval = {speedup_eval:.2f}x"
-    )
-
+    jax_m = results["jax"]
+    for name in ("torch", "torch-cpu"):
+        m = results[name]
+        print(
+            f"Keras-jax jit (cpu) vs {name} eager ({m['device']}): "
+            f"train {m['train_step_p50_ms'] / jax_m['train_step_p50_ms']:.2f}x | "
+            f"eval {m['eval_step_p50_ms'] / jax_m['eval_step_p50_ms']:.2f}x"
+        )
 
 if __name__ == "__main__":
     main()
